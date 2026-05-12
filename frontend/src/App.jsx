@@ -1,5 +1,13 @@
-import { useEffect, useState } from 'react';
-import { LineChart, Line, CartesianGrid, XAxis, YAxis, Tooltip } from 'recharts';
+import { useState } from 'react';
+import {
+  LineChart,
+  Line,
+  CartesianGrid,
+  XAxis,
+  YAxis,
+  Tooltip,
+  ResponsiveContainer
+} from 'recharts';
 
 function App() {
   const [cuenta, setCuenta] = useState('');
@@ -10,18 +18,24 @@ function App() {
   const consultarCuenta = async () => {
     try {
       setError('');
+
       const res = await fetch(`/api/cuenta/${cuenta}`);
+
       if (!res.ok) throw new Error('Cuenta no encontrada');
+
       const data = await res.json();
       setDatosCuenta(data);
-      // Cargar automáticamente el historial
+
       const resHistorial = await fetch(`/api/historial/${cuenta}`);
+
       if (resHistorial.ok) {
         const dataHistorial = await resHistorial.json();
+
         const formateado = dataHistorial.map(t => ({
           fecha: t.fecha.split('T')[0],
           saldo: t.saldo
         }));
+
         setHistorial(formateado);
       }
     } catch (err) {
@@ -39,104 +53,187 @@ function App() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-100 py-8">
-      <div className="max-w-4xl mx-auto px-4">
-        <h1 className="text-3xl font-bold text-center mb-8 text-gray-800">
-          Banco Nexus - Sistema Bancario
-        </h1>
-
-        <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-          <div className="flex gap-4">
-            <input
-              type="text"
-              placeholder="Número de cuenta (ej: 001)"
-              value={cuenta}
-              onChange={e => setCuenta(e.target.value)}
-              className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-            <button
-              onClick={consultarCuenta}
-              className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-            >
-              Consultar
-            </button>
-            <button
-              onClick={limpiar}
-              className="px-6 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
-            >
-              Limpiar
-            </button>
+    <div className="min-h-screen bg-gray-100 p-6">
+      <div className="max-w-7xl mx-auto">
+        <nav className="bg-black shadow-lg mb-8">
+          <div className="max-w-7xl mx-auto px-6 py-4">
+            <h1 className="text-3xl text-center font-bold text-white">
+              Banco Nexus - Sistema Bancario
+            </h1>
           </div>
-        </div>
+        </nav>
 
-        {error && (
-          <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg mb-6">
-            {error}
-          </div>
-        )}
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
 
-        {datosCuenta && (
-          <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-            <h2 className="text-xl font-bold mb-4 text-gray-800">
-              Detalles de la Cuenta
+          {/* PANEL IZQUIERDO */}
+          <div className="bg-white rounded-xl shadow-md p-6 h-fit">
+            <h2 className="text-xl font-bold mb-6 text-gray-800">
+              Consulta de Cuenta
             </h2>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="p-4 bg-blue-50 rounded-lg">
-                <p className="text-sm text-gray-600">Cuenta</p>
-                <p className="text-2xl font-bold text-blue-600">{datosCuenta.cuenta}</p>
-              </div>
-              <div className="p-4 bg-green-50 rounded-lg">
-                <p className="text-sm text-gray-600">Saldo</p>
-                <p className="text-2xl font-bold text-green-600">${datosCuenta.saldo.toLocaleString()}</p>
-              </div>
-              <div className="p-4 bg-purple-50 rounded-lg">
-                <p className="text-sm text-gray-600">Cliente</p>
-                <p className="text-lg font-bold text-purple-600">{datosCuenta.cliente}</p>
-              </div>
+            <p className="text-sm text-gray-600 mb-2"> Introduce el número de Cuenta para consultar la información</p>
+            <div className="flex flex-col gap-4">
+              <input
+                type="text"
+                placeholder="001"
+                value={cuenta}
+                onChange={(e) => setCuenta(e.target.value)}
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+
+              <button
+                onClick={consultarCuenta}
+                className="w-full py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-semibold"
+              >
+                Consultar
+              </button>
+
+              <button
+                onClick={limpiar}
+                className="w-full py-3 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors font-semibold"
+              >
+                Limpiar
+              </button>
             </div>
 
-            <h3 className="text-lg font-semibold mt-6 mb-3 text-gray-800">
-              Últimas Transacciones
-            </h3>
-            <div className="overflow-x-auto">
-              <table className="w-full border-collapse">
-                <thead>
-                  <tr className="bg-gray-100">
-                    <th className="px-4 py-2 text-left border">Fecha</th>
-                    <th className="px-4 py-2 text-left border">Tipo</th>
-                    <th className="px-4 py-2 text-right border">Monto</th>
-                    <th className="px-4 py-2 text-right border">Saldo</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {datosCuenta.transacciones.map((t, i) => (
-                    <tr key={i} className="hover:bg-gray-50">
-                      <td className="px-4 py-2 border">{t.fecha.split('T')[0]}</td>
-                      <td className="px-4 py-2 border capitalize">{t.tipo}</td>
-                      <td className="px-4 py-2 border text-right">${t.monto.toLocaleString()}</td>
-                      <td className="px-4 py-2 border text-right">${t.saldo.toLocaleString()}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            {historial.length > 0 && (
-              <div className="mt-6">
-                <h3 className="text-lg font-semibold mb-3 text-gray-800">
-                  Evolución del Saldo
-                </h3>
-                <LineChart width={800} height={300} data={historial}>
-                  <Line type="monotone" dataKey="saldo" stroke="#8884d8" strokeWidth={2} />
-                  <CartesianGrid stroke="#ccc" />
-                  <XAxis dataKey="fecha" />
-                  <YAxis />
-                  <Tooltip formatter={(value) => [`$${value.toLocaleString()}`, 'Saldo']} />
-                </LineChart>
+            {error && (
+              <div className="mt-4 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg">
+                {error}
               </div>
             )}
           </div>
-        )}
+
+          {/* PANEL DERECHO */}
+          <div className="lg:col-span-3 flex flex-col gap-6">
+
+            {/* INFORMACIÓN DE LA CUENTA */}
+            {datosCuenta && (
+              <>
+                <div className="bg-white rounded-xl shadow-md p-6">
+                  <h2 className="text-xl font-bold mb-6 text-gray-800">
+                    Información de la Cuenta
+                  </h2>
+
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="bg-blue-50 p-5 rounded-xl">
+                      <p className="text-sm text-gray-600">
+                        Número de Cuenta
+                      </p>
+                      <p className="text-2xl font-bold text-blue-700">
+                        {datosCuenta.cuenta}
+                      </p>
+                    </div>
+
+                    <div className="bg-purple-50 p-5 rounded-xl">
+                      <p className="text-sm text-gray-600">
+                        Cliente
+                      </p>
+                      <p className="text-xl font-bold text-purple-700">
+                        {datosCuenta.cliente}
+                      </p>
+                    </div>
+
+                    <div className="bg-green-50 p-5 rounded-xl">
+                      <p className="text-sm text-gray-600">
+                        Saldo Actual
+                      </p>
+                      <p className="text-2xl font-bold text-green-700">
+                        ${datosCuenta.saldo.toLocaleString()}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* HISTORIAL */}
+                <div className="bg-white rounded-xl shadow-md p-6">
+                  <h2 className="text-xl font-bold mb-4 text-gray-800">
+                    Historial de Movimientos
+                  </h2>
+
+                  <div className="overflow-x-auto">
+                    <table className="w-full border-collapse">
+                      <thead>
+                        <tr className="bg-gray-100">
+                          <th className="px-4 py-3 border text-left">
+                            Fecha
+                          </th>
+                          <th className="px-4 py-3 border text-left">
+                            Tipo
+                          </th>
+                          <th className="px-4 py-3 border text-right">
+                            Monto
+                          </th>
+                          <th className="px-4 py-3 border text-right">
+                            Saldo
+                          </th>
+                        </tr>
+                      </thead>
+
+                      <tbody>
+                        {datosCuenta.transacciones.map((t, i) => (
+                          <tr
+                            key={i}
+                            className="hover:bg-gray-50"
+                          >
+                            <td className="px-4 py-3 border">
+                              {t.fecha.split('T')[0]}
+                            </td>
+
+                            <td className="px-4 py-3 border capitalize">
+                              {t.tipo}
+                            </td>
+
+                            <td className="px-4 py-3 border text-right">
+                              ${t.monto.toLocaleString()}
+                            </td>
+
+                            <td className="px-4 py-3 border text-right">
+                              ${t.saldo.toLocaleString()}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                {/* GRÁFICO */}
+                {historial.length > 0 && (
+                  <div className="bg-white rounded-xl shadow-md p-6">
+                    <h2 className="text-xl font-bold mb-4 text-gray-800">
+                      Evolución del Saldo
+                    </h2>
+
+                    <div className="w-full h-[350px]">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <LineChart data={historial}>
+                          <Line
+                            type="monotone"
+                            dataKey="saldo"
+                            stroke="#2563eb"
+                            strokeWidth={3}
+                          />
+
+                          <CartesianGrid stroke="#d1d5db" />
+
+                          <XAxis dataKey="fecha" />
+
+                          <YAxis />
+
+                          <Tooltip
+                            formatter={(value) => [
+                              `$${value.toLocaleString()}`,
+                              'Saldo'
+                            ]}
+                          />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );
