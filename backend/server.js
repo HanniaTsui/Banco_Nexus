@@ -69,8 +69,9 @@ app.get('/api/historial/:cuenta', async (req, res) => {
 app.post('/api/deposito', async (req, res) => {
   try {
     const { cuenta, monto } = req.body;
+    const montoNum = Number(monto);
 
-    if (!cuenta || !monto || monto <= 0) {
+    if (!cuenta || !monto || isNaN(montoNum) || montoNum <= 0) {
       return res.status(400).json({ error: 'Datos inválidos' });
     }
 
@@ -79,7 +80,7 @@ app.post('/api/deposito', async (req, res) => {
       return res.status(404).json({ error: 'Cuenta no encontrada' });
     }
 
-    const nuevoSaldo = cuentaData.saldo + monto;
+    const nuevoSaldo = cuentaData.saldo + montoNum;
     await db.collection('cuentas').updateOne(
       { cuenta },
       { $set: { saldo: nuevoSaldo } }
@@ -88,7 +89,7 @@ app.post('/api/deposito', async (req, res) => {
     const transaccion = {
       cuenta,
       tipo: 'deposito',
-      monto,
+      monto: montoNum,
       fecha: new Date(),
       saldo: nuevoSaldo
     };
@@ -109,8 +110,9 @@ app.post('/api/deposito', async (req, res) => {
 app.post('/api/retiro', async (req, res) => {
   try {
     const { cuenta, monto } = req.body;
+    const montoNum = Number(monto);
 
-    if (!cuenta || !monto || monto <= 0) {
+    if (!cuenta || !monto || isNaN(montoNum) || montoNum <= 0) {
       return res.status(400).json({ error: 'Datos inválidos' });
     }
 
@@ -119,11 +121,11 @@ app.post('/api/retiro', async (req, res) => {
       return res.status(404).json({ error: 'Cuenta no encontrada' });
     }
 
-    if (cuentaData.saldo < monto) {
+    if (cuentaData.saldo < montoNum) {
       return res.status(400).json({ error: 'Saldo insuficiente' });
     }
 
-    const nuevoSaldo = cuentaData.saldo - monto;
+    const nuevoSaldo = cuentaData.saldo - montoNum;
     await db.collection('cuentas').updateOne(
       { cuenta },
       { $set: { saldo: nuevoSaldo } }
@@ -132,7 +134,7 @@ app.post('/api/retiro', async (req, res) => {
     const transaccion = {
       cuenta,
       tipo: 'retiro',
-      monto,
+      monto: montoNum,
       fecha: new Date(),
       saldo: nuevoSaldo
     };
