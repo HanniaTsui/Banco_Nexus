@@ -11,13 +11,16 @@ import {
 
 function App() {
   const [cuenta, setCuenta] = useState('');
+  const [monto, setMonto] = useState('');
   const [datosCuenta, setDatosCuenta] = useState(null);
   const [historial, setHistorial] = useState([]);
   const [error, setError] = useState('');
+  const [mensaje, setMensaje] = useState('');
 
   const consultarCuenta = async () => {
     try {
       setError('');
+      setMensaje('');
 
       const res = await fetch(`/api/cuenta/${cuenta}`);
 
@@ -45,17 +48,83 @@ function App() {
     }
   };
 
+  const hacerDeposito = async () => {
+    try {
+      setError('');
+      setMensaje('');
+
+      const res = await fetch('/api/deposito', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          cuenta,
+          monto: Number(monto)
+        })
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error);
+      }
+
+      setMensaje('Depósito realizado correctamente');
+      setMonto('');
+
+      consultarCuenta();
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  const hacerRetiro = async () => {
+    try {
+      setError('');
+      setMensaje('');
+
+      const res = await fetch('/api/retiro', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          cuenta,
+          monto: Number(monto)
+        })
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error);
+      }
+
+      setMensaje('Retiro realizado correctamente');
+      setMonto('');
+
+      consultarCuenta();
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
   const limpiar = () => {
     setCuenta('');
+    setMonto('');
     setDatosCuenta(null);
     setHistorial([]);
     setError('');
+    setMensaje('');
   };
 
   return (
     <div className="min-h-screen bg-gray-100 p-6">
       <div className="max-w-7xl mx-auto">
-        <nav className="bg-black shadow-lg mb-8">
+
+        {/* NAVBAR */}
+        <nav className="bg-black shadow-lg mb-8 rounded-xl">
           <div className="max-w-7xl mx-auto px-6 py-4">
             <h1 className="text-3xl text-center font-bold text-white">
               Banco Nexus - Sistema Bancario
@@ -68,18 +137,34 @@ function App() {
           {/* PANEL IZQUIERDO */}
           <div className="bg-white rounded-xl shadow-md p-6 h-fit">
             <h2 className="text-xl font-bold mb-6 text-gray-800">
-              Consulta de Cuenta
+              Operaciones Bancarias
             </h2>
-            <p className="text-sm text-gray-600 mb-2"> Introduce el número de Cuenta para consultar la información</p>
+
+            <p className="text-sm text-gray-600 mb-2">
+              Introduce el número de cuenta y el monto para realizar operaciones.
+            </p>
+
             <div className="flex flex-col gap-4">
+
+              {/* INPUT CUENTA */}
               <input
                 type="text"
-                placeholder="001"
+                placeholder="Número de cuenta"
                 value={cuenta}
                 onChange={(e) => setCuenta(e.target.value)}
                 className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
 
+              {/* INPUT MONTO */}
+              <input
+                type="number"
+                placeholder="Monto"
+                value={monto}
+                onChange={(e) => setMonto(e.target.value)}
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+              />
+
+              {/* BOTÓN CONSULTAR */}
               <button
                 onClick={consultarCuenta}
                 className="w-full py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-semibold"
@@ -87,6 +172,23 @@ function App() {
                 Consultar
               </button>
 
+              {/* BOTÓN DEPÓSITO */}
+              <button
+                onClick={hacerDeposito}
+                className="w-full py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-semibold"
+              >
+                Depositar
+              </button>
+
+              {/* BOTÓN RETIRO */}
+              <button
+                onClick={hacerRetiro}
+                className="w-full py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-semibold"
+              >
+                Retirar
+              </button>
+
+              {/* BOTÓN LIMPIAR */}
               <button
                 onClick={limpiar}
                 className="w-full py-3 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors font-semibold"
@@ -95,9 +197,17 @@ function App() {
               </button>
             </div>
 
+            {/* MENSAJE ERROR */}
             {error && (
               <div className="mt-4 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg">
                 {error}
+              </div>
+            )}
+
+            {/* MENSAJE ÉXITO */}
+            {mensaje && (
+              <div className="mt-4 bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded-lg">
+                {mensaje}
               </div>
             )}
           </div>
@@ -105,19 +215,22 @@ function App() {
           {/* PANEL DERECHO */}
           <div className="lg:col-span-3 flex flex-col gap-6">
 
-            {/* INFORMACIÓN DE LA CUENTA */}
             {datosCuenta && (
               <>
+
+                {/* INFORMACIÓN DE CUENTA */}
                 <div className="bg-white rounded-xl shadow-md p-6">
                   <h2 className="text-xl font-bold mb-6 text-gray-800">
                     Información de la Cuenta
                   </h2>
 
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+
                     <div className="bg-blue-50 p-5 rounded-xl">
                       <p className="text-sm text-gray-600">
                         Número de Cuenta
                       </p>
+
                       <p className="text-2xl font-bold text-blue-700">
                         {datosCuenta.cuenta}
                       </p>
@@ -127,6 +240,7 @@ function App() {
                       <p className="text-sm text-gray-600">
                         Cliente
                       </p>
+
                       <p className="text-xl font-bold text-purple-700">
                         {datosCuenta.cliente}
                       </p>
@@ -136,10 +250,12 @@ function App() {
                       <p className="text-sm text-gray-600">
                         Saldo Actual
                       </p>
+
                       <p className="text-2xl font-bold text-green-700">
                         ${datosCuenta.saldo.toLocaleString()}
                       </p>
                     </div>
+
                   </div>
                 </div>
 
@@ -150,18 +266,27 @@ function App() {
                   </h2>
 
                   <div className="overflow-x-auto">
+
                     <table className="w-full border-collapse">
+
                       <thead>
                         <tr className="bg-gray-100">
                           <th className="px-4 py-3 border text-left">
                             Fecha
                           </th>
+
                           <th className="px-4 py-3 border text-left">
                             Tipo
                           </th>
+
                           <th className="px-4 py-3 border text-right">
                             Monto
                           </th>
+
+                          <th className="px-4 py-3 border text-left">
+                            Sucursal
+                          </th>
+
                           <th className="px-4 py-3 border text-right">
                             Saldo
                           </th>
@@ -169,11 +294,13 @@ function App() {
                       </thead>
 
                       <tbody>
+
                         {datosCuenta.transacciones.map((t, i) => (
                           <tr
                             key={i}
                             className="hover:bg-gray-50"
                           >
+
                             <td className="px-4 py-3 border">
                               {t.fecha.split('T')[0]}
                             </td>
@@ -183,29 +310,41 @@ function App() {
                             </td>
 
                             <td className="px-4 py-3 border text-right">
-                              ${t.monto.toLocaleString()}
+                              ${Number(t.monto).toLocaleString()}
+                            </td>
+
+                            <td className="px-4 py-3 border">
+                              {t.sucursal || 'N/A'}
                             </td>
 
                             <td className="px-4 py-3 border text-right">
-                              ${t.saldo.toLocaleString()}
+                              ${Number(t.saldo).toLocaleString()}
                             </td>
+
                           </tr>
                         ))}
+
                       </tbody>
+
                     </table>
+
                   </div>
                 </div>
 
-                {/* GRÁFICO */}
+                {/* GRÁFICA */}
                 {historial.length > 0 && (
                   <div className="bg-white rounded-xl shadow-md p-6">
+
                     <h2 className="text-xl font-bold mb-4 text-gray-800">
                       Evolución del Saldo
                     </h2>
 
                     <div className="w-full h-[350px]">
+
                       <ResponsiveContainer width="100%" height="100%">
+
                         <LineChart data={historial}>
+
                           <Line
                             type="monotone"
                             dataKey="saldo"
@@ -221,17 +360,23 @@ function App() {
 
                           <Tooltip
                             formatter={(value) => [
-                              `$${value.toLocaleString()}`,
+                              `$${Number(value).toLocaleString()}`,
                               'Saldo'
                             ]}
                           />
+
                         </LineChart>
+
                       </ResponsiveContainer>
+
                     </div>
+
                   </div>
                 )}
+
               </>
             )}
+
           </div>
         </div>
       </div>
