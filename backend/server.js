@@ -106,7 +106,7 @@ app.post('/api/deposito', async (req, res) => {
 
   try {
 
-    const { cuenta, monto } = req.body;
+    const { cuenta, monto, sucursal } = req.body;
 
     const montoNum = Number(monto);
 
@@ -118,9 +118,13 @@ app.post('/api/deposito', async (req, res) => {
 
     }
 
-    const cuentaData = await db.collection('cuentas').findOne({ cuenta });
+    const cuentaActualizada = await db.collection('cuentas').findOneAndUpdate(
+      { cuenta },
+      { $inc: { saldo: montoNum } },
+      { returnDocument: 'after' }
+    );
 
-    if (!cuentaData) {
+    if (!cuentaActualizada) {
 
       return res.status(404).json({
         error: 'Cuenta no encontrada'
@@ -128,38 +132,28 @@ app.post('/api/deposito', async (req, res) => {
 
     }
 
-    const nuevoSaldo = cuentaData.saldo + montoNum;
-
-    await db.collection('cuentas').updateOne(
-      { cuenta },
-      { $set: { saldo: nuevoSaldo } }
-    );
-
-    const sucursales = [
+    const sucursalFinal = sucursal || [
       'CDMX',
       'Guadalajara',
       'La Paz',
       'Monterrey',
       'Tijuana'
-    ];
-
-    const sucursalAleatoria =
-      sucursales[Math.floor(Math.random() * sucursales.length)];
+    ][Math.floor(Math.random() * 5)];
 
     const transaccion = {
       cuenta,
       tipo: 'deposito',
       monto: montoNum,
-      sucursal: sucursalAleatoria,
+      sucursal: sucursalFinal,
       fecha: new Date(),
-      saldo: nuevoSaldo
+      saldo: cuentaActualizada.saldo
     };
 
     await db.collection('transacciones').insertOne(transaccion);
 
     res.json({
       cuenta,
-      saldo: nuevoSaldo,
+      saldo: cuentaActualizada.saldo,
       transaccion
     });
 
@@ -179,7 +173,7 @@ app.post('/api/retiro', async (req, res) => {
 
   try {
 
-    const { cuenta, monto } = req.body;
+    const { cuenta, monto, sucursal } = req.body;
 
     const montoNum = Number(monto);
 
@@ -191,56 +185,48 @@ app.post('/api/retiro', async (req, res) => {
 
     }
 
-    const cuentaData = await db.collection('cuentas').findOne({ cuenta });
+    const cuentaActualizada = await db.collection('cuentas').findOneAndUpdate(
+      { cuenta, saldo: { $gte: montoNum } },
+      { $inc: { saldo: -montoNum } },
+      { returnDocument: 'after' }
+    );
 
-    if (!cuentaData) {
+    if (!cuentaActualizada) {
 
-      return res.status(404).json({
-        error: 'Cuenta no encontrada'
-      });
-
-    }
-
-    if (cuentaData.saldo < montoNum) {
-
+      const cuentaData = await db.collection('cuentas').findOne({ cuenta });
+      if (!cuentaData) {
+        return res.status(404).json({
+          error: 'Cuenta no encontrada'
+        });
+      }
       return res.status(400).json({
         error: 'Saldo insuficiente'
       });
 
     }
 
-    const nuevoSaldo = cuentaData.saldo - montoNum;
-
-    await db.collection('cuentas').updateOne(
-      { cuenta },
-      { $set: { saldo: nuevoSaldo } }
-    );
-
-    const sucursales = [
+    const sucursalFinal = sucursal || [
       'CDMX',
       'Guadalajara',
       'La Paz',
       'Monterrey',
       'Tijuana'
-    ];
-
-    const sucursalAleatoria =
-      sucursales[Math.floor(Math.random() * sucursales.length)];
+    ][Math.floor(Math.random() * 5)];
 
     const transaccion = {
       cuenta,
       tipo: 'retiro',
       monto: montoNum,
-      sucursal: sucursalAleatoria,
+      sucursal: sucursalFinal,
       fecha: new Date(),
-      saldo: nuevoSaldo
+      saldo: cuentaActualizada.saldo
     };
 
     await db.collection('transacciones').insertOne(transaccion);
 
     res.json({
       cuenta,
-      saldo: nuevoSaldo,
+      saldo: cuentaActualizada.saldo,
       transaccion
     });
 
