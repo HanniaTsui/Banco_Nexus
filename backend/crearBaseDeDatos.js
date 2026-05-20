@@ -1,11 +1,11 @@
 const { MongoClient } = require('mongodb');
-const uri = 'mongodb://localhost:27017';
+const uri = 'mongodb://localhost:27017,localhost:27018,localhost:27019/?replicaSet=rs0';
 const client = new MongoClient(uri);
 
 async function crearBD() {
   try {
     await client.connect();
-    console.log('Conectado a MongoDB');
+    console.log('Conectado al Replica Set');
     const db = client.db('banco_nexus');
 
     const clientes = db.collection('clientes');
