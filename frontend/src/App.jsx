@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   LineChart,
   Line,
@@ -16,33 +16,99 @@ function App() {
   const [historial, setHistorial] = useState([]);
   const [error, setError] = useState('');
   const [mensaje, setMensaje] = useState('');
+  const [latencyWarning, setLatencyWarning] = useState('');
+  const [persistenciaStatus, setPersistenciaStatus] = useState('');
+  const [replicaStatus, setReplicaStatus] = useState('');
+  const [ultimaPrueba, setUltimaPrueba] = useState(null);
+
+  useEffect(() => {
+    const guardado = localStorage.getItem('ultimoEstadoCuenta');
+    if (guardado) {
+      setUltimaPrueba(JSON.parse(guardado));
+    }
+  }, []);
+
+  const setNotification = () => {
+    setError('');
+    setMensaje('');
+    setPersistenciaStatus('');
+    setReplicaStatus('');
+  };
+
+  const fetchWithTimeout = async (url, options = {}, timeout = 6000) => {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeout);
+    const start = Date.now();
+
+    try {
+      const response = await fetch(url, { ...options, signal: controller.signal });
+      const elapsed = Date.now() - start;
+
+      if (elapsed > 1500) {
+        setLatencyWarning('Latencia alta detectada. Puede deberse a carga o a fallos en el nodo primario.');
+      } else {
+        setLatencyWarning('');
+      }
+
+      clearTimeout(timer);
+      return response;
+    } catch (err) {
+      clearTimeout(timer);
+      if (err.name === 'AbortError') {
+        throw new Error('La peticion tardo demasiado. Posible latencia extrema o caida del nodo primario.');
+      }
+      throw err;
+    }
+  };
+
+  const handleFetchError = (err) => {
+    const message = err.message || 'Error inesperado';
+    if (message.includes('Failed to fetch') || message.includes('nodo primario') || message.includes('No se pudo conectar')) {
+      setError('No se pudo conectar al nodo primario. Verifica el servidor o la replicacion.');
+    } else {
+      setError(message);
+    }
+  };
+
+  const safeFetch = async (url, options) => {
+    try {
+      const res = await fetchWithTimeout(url, options);
+      return res;
+    } catch (err) {
+      handleFetchError(err);
+      throw err;
+    }
+  };
 
   const consultarCuenta = async () => {
     try {
-      setError('');
       setMensaje('');
+      setError('');
+      setPersistenciaStatus('');
+      setReplicaStatus('');
 
-      const res = await fetch(`/api/cuenta/${cuenta}`);
-
-      if (!res.ok) throw new Error('Cuenta no encontrada');
+      const res = await safeFetch(`/api/cuenta/${cuenta}`);
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || 'Cuenta no encontrada');
+      }
 
       const data = await res.json();
       setDatosCuenta(data);
 
-      const resHistorial = await fetch(`/api/historial/${cuenta}`);
-
+      const resHistorial = await safeFetch(`/api/historial/${cuenta}`);
       if (resHistorial.ok) {
         const dataHistorial = await resHistorial.json();
-
         const formateado = dataHistorial.map(t => ({
           fecha: t.fecha.split('T')[0],
           saldo: t.saldo
         }));
-
         setHistorial(formateado);
+      } else {
+        setHistorial([]);
       }
     } catch (err) {
-      setError(err.message);
+      if (!error) setError(err.message);
       setDatosCuenta(null);
       setHistorial([]);
     }
@@ -50,63 +116,123 @@ function App() {
 
   const hacerDeposito = async () => {
     try {
-      setError('');
-      setMensaje('');
-
-      const res = await fetch('/api/deposito', {
+      setNotification();
+      const res = await safeFetch('/api/deposito', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          cuenta,
-          monto: Number(monto)
-        })
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cuenta, monto: Number(monto) })
       });
-
       const data = await res.json();
-
       if (!res.ok) {
-        throw new Error(data.error);
+        throw new Error(data.error || 'Error en deposito');
       }
-
-      setMensaje('Depósito realizado correctamente');
+      setMensaje('Deposito realizado correctamente');
       setMonto('');
-
       consultarCuenta();
     } catch (err) {
-      setError(err.message);
+      if (!error) setError(err.message);
     }
   };
 
   const hacerRetiro = async () => {
     try {
-      setError('');
-      setMensaje('');
-
-      const res = await fetch('/api/retiro', {
+      setNotification();
+      const res = await safeFetch('/api/retiro', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          cuenta,
-          monto: Number(monto)
-        })
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cuenta, monto: Number(monto) })
       });
-
       const data = await res.json();
-
       if (!res.ok) {
-        throw new Error(data.error);
+        throw new Error(data.error || 'Error en retiro');
       }
-
       setMensaje('Retiro realizado correctamente');
       setMonto('');
-
       consultarCuenta();
     } catch (err) {
-      setError(err.message);
+      if (!error) setError(err.message);
+    }
+  };
+
+  const guardarPersistencia = async () => {
+    try {
+      setNotification();
+      if (!cuenta) {
+        setError('Ingresa el numero de cuenta para la prueba de persistencia.');
+        return;
+      }
+      const res = await safeFetch(`/api/cuenta/${cuenta}`);
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || 'No se pudo obtener la cuenta.');
+      }
+      const data = await res.json();
+      const estado = {
+        cuenta: data.cuenta,
+        cliente: data.cliente,
+        saldo: data.saldo,
+        transacciones: data.transacciones.map(t => ({ fecha: t.fecha, monto: t.monto, tipo: t.tipo })),
+        guardadoEn: new Date().toISOString()
+      };
+      localStorage.setItem('ultimoEstadoCuenta', JSON.stringify(estado));
+      setUltimaPrueba(estado);
+      setPersistenciaStatus('Estado guardado. Reinicia el servidor y usa "Verificar persistencia" despues del reinicio.');
+    } catch (err) {
+      if (!error) setError(err.message);
+    }
+  };
+
+  const verificarPersistencia = async () => {
+    try {
+      setNotification();
+      if (!cuenta) {
+        setError('Ingresa el numero de cuenta para verificar persistencia.');
+        return;
+      }
+      if (!ultimaPrueba || ultimaPrueba.cuenta !== cuenta) {
+        setError('No existe una prueba guardada para esta cuenta. Usa primero "Guardar prueba de persistencia".');
+        return;
+      }
+      const res = await safeFetch(`/api/cuenta/${cuenta}`);
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || 'No se pudo obtener la cuenta para verificacion.');
+      }
+      const data = await res.json();
+      const mismoSaldo = Number(data.saldo) === Number(ultimaPrueba.saldo);
+      const mismoConteo = data.transacciones.length === ultimaPrueba.transacciones.length;
+      if (mismoSaldo && mismoConteo) {
+        setPersistenciaStatus('Persistencia verificada. Saldo y numero de transacciones coinciden tras el reinicio.');
+      } else {
+        setPersistenciaStatus(
+          `Persistencia no verificada. Saldo actual: ${data.saldo}, saldo guardado: ${ultimaPrueba.saldo}. Transacciones actuales: ${data.transacciones.length}, guardadas: ${ultimaPrueba.transacciones.length}.`
+        );
+      }
+    } catch (err) {
+      if (!error) setError(err.message);
+    }
+  };
+
+  const probarOperacionReplica = async () => {
+    try {
+      setNotification();
+      if (!cuenta) {
+        setError('Ingresa el numero de cuenta para la prueba de replicacion.');
+        return;
+      }
+      const res = await safeFetch('/api/deposito', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cuenta, monto: 1, sucursal: 'PruebaReplica' })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'No se pudo crear la operacion de prueba.');
+      }
+      await consultarCuenta();
+      setReplicaStatus('Operacion de prueba ejecutada correctamente. Verifica el historial actualizado para asegurar la replica.');
+    } catch (err) {
+      if (!error) setError(err.message);
     }
   };
 
@@ -117,45 +243,32 @@ function App() {
     setHistorial([]);
     setError('');
     setMensaje('');
+    setLatencyWarning('');
+    setPersistenciaStatus('');
+    setReplicaStatus('');
   };
 
   return (
     <div className="min-h-screen bg-gray-100 p-6">
       <div className="max-w-7xl mx-auto">
-
-        {/* NAVBAR */}
         <nav className="bg-black shadow-lg mb-8 rounded-xl">
           <div className="max-w-7xl mx-auto px-6 py-4">
-            <h1 className="text-3xl text-center font-bold text-white">
-              Banco Nexus - Sistema Bancario
-            </h1>
+            <h1 className="text-3xl text-center font-bold text-white">Banco Nexus - Sistema Bancario</h1>
           </div>
         </nav>
 
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-
-          {/* PANEL IZQUIERDO */}
           <div className="bg-white rounded-xl shadow-md p-6 h-fit">
-            <h2 className="text-xl font-bold mb-6 text-gray-800">
-              Operaciones Bancarias
-            </h2>
-
-            <p className="text-sm text-gray-600 mb-2">
-              Introduce el número de cuenta y el monto para realizar operaciones.
-            </p>
-
+            <h2 className="text-xl font-bold mb-6 text-gray-800">Operaciones Bancarias</h2>
+            <p className="text-sm text-gray-600 mb-2">Introduce el numero de cuenta y el monto para realizar operaciones.</p>
             <div className="flex flex-col gap-4">
-
-              {/* INPUT CUENTA */}
               <input
                 type="text"
-                placeholder="Número de cuenta"
+                placeholder="Numero de cuenta"
                 value={cuenta}
                 onChange={(e) => setCuenta(e.target.value)}
                 className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
-
-              {/* INPUT MONTO */}
               <input
                 type="number"
                 placeholder="Monto"
@@ -163,220 +276,103 @@ function App() {
                 onChange={(e) => setMonto(e.target.value)}
                 className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
               />
-
-              {/* BOTÓN CONSULTAR */}
-              <button
-                onClick={consultarCuenta}
-                className="w-full py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-semibold"
-              >
-                Consultar
-              </button>
-
-              {/* BOTÓN DEPÓSITO */}
-              <button
-                onClick={hacerDeposito}
-                className="w-full py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-semibold"
-              >
-                Depositar
-              </button>
-
-              {/* BOTÓN RETIRO */}
-              <button
-                onClick={hacerRetiro}
-                className="w-full py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-semibold"
-              >
-                Retirar
-              </button>
-
-              {/* BOTÓN LIMPIAR */}
-              <button
-                onClick={limpiar}
-                className="w-full py-3 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors font-semibold"
-              >
-                Limpiar
-              </button>
+              <button onClick={consultarCuenta} className="w-full py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-semibold">Consultar</button>
+              <button onClick={hacerDeposito} className="w-full py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-semibold">Depositar</button>
+              <button onClick={hacerRetiro} className="w-full py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-semibold">Retirar</button>
+              <button onClick={limpiar} className="w-full py-3 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors font-semibold">Limpiar</button>
             </div>
 
-            {/* MENSAJE ERROR */}
-            {error && (
-              <div className="mt-4 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg">
-                {error}
-              </div>
-            )}
+            <div className="mt-6 p-4 bg-slate-50 rounded-xl border border-slate-200">
+              <h3 className="text-lg font-semibold text-slate-800 mb-3">Pruebas de persistencia y replica</h3>
+              <p className="text-sm text-slate-600 mb-4">Guarda el estado antes del reinicio y verifica que los datos se mantengan. Usa la prueba de replica para ejecutar una operacion de escritura y confirmar el comportamiento.</p>
+              <button onClick={guardarPersistencia} className="w-full py-2 mb-2 bg-sky-600 text-white rounded-lg hover:bg-sky-700 transition-colors font-semibold">Guardar prueba de persistencia</button>
+              <button onClick={verificarPersistencia} className="w-full py-2 mb-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors font-semibold">Verificar persistencia</button>
+              <button onClick={probarOperacionReplica} className="w-full py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors font-semibold">Probar operacion replicada</button>
 
-            {/* MENSAJE ÉXITO */}
-            {mensaje && (
-              <div className="mt-4 bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded-lg">
-                {mensaje}
-              </div>
-            )}
+              {persistenciaStatus && <div className="mt-4 bg-blue-50 border border-blue-200 text-blue-700 px-4 py-3 rounded-lg">{persistenciaStatus}</div>}
+              {replicaStatus && <div className="mt-4 bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg">{replicaStatus}</div>}
+              {ultimaPrueba && (
+                <div className="mt-4 bg-white border border-slate-200 text-slate-700 px-4 py-3 rounded-lg">
+                  <p className="font-semibold">Ultima prueba guardada:</p>
+                  <p className="text-sm">Cuenta: {ultimaPrueba.cuenta}</p>
+                  <p className="text-sm">Saldo: ${Number(ultimaPrueba.saldo).toLocaleString()}</p>
+                  <p className="text-sm">Transacciones guardadas: {ultimaPrueba.transacciones.length}</p>
+                </div>
+              )}
+            </div>
+
+            {latencyWarning && <div className="mt-4 bg-amber-100 border border-amber-300 text-amber-800 px-4 py-3 rounded-lg">{latencyWarning}</div>}
+            {error && <div className="mt-4 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg">{error}</div>}
+            {mensaje && <div className="mt-4 bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded-lg">{mensaje}</div>}
           </div>
 
-          {/* PANEL DERECHO */}
           <div className="lg:col-span-3 flex flex-col gap-6">
-
             {datosCuenta && (
               <>
-
-                {/* INFORMACIÓN DE CUENTA */}
                 <div className="bg-white rounded-xl shadow-md p-6">
-                  <h2 className="text-xl font-bold mb-6 text-gray-800">
-                    Información de la Cuenta
-                  </h2>
-
+                  <h2 className="text-xl font-bold mb-6 text-gray-800">Informacion de la Cuenta</h2>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-
                     <div className="bg-blue-50 p-5 rounded-xl">
-                      <p className="text-sm text-gray-600">
-                        Número de Cuenta
-                      </p>
-
-                      <p className="text-2xl font-bold text-blue-700">
-                        {datosCuenta.cuenta}
-                      </p>
+                      <p className="text-sm text-gray-600">Numero de Cuenta</p>
+                      <p className="text-2xl font-bold text-blue-700">{datosCuenta.cuenta}</p>
                     </div>
-
                     <div className="bg-purple-50 p-5 rounded-xl">
-                      <p className="text-sm text-gray-600">
-                        Cliente
-                      </p>
-
-                      <p className="text-xl font-bold text-purple-700">
-                        {datosCuenta.cliente}
-                      </p>
+                      <p className="text-sm text-gray-600">Cliente</p>
+                      <p className="text-xl font-bold text-purple-700">{datosCuenta.cliente}</p>
                     </div>
-
                     <div className="bg-green-50 p-5 rounded-xl">
-                      <p className="text-sm text-gray-600">
-                        Saldo Actual
-                      </p>
-
-                      <p className="text-2xl font-bold text-green-700">
-                        ${datosCuenta.saldo.toLocaleString()}
-                      </p>
+                      <p className="text-sm text-gray-600">Saldo Actual</p>
+                      <p className="text-2xl font-bold text-green-700">${datosCuenta.saldo.toLocaleString()}</p>
                     </div>
-
                   </div>
                 </div>
 
-                {/* HISTORIAL */}
                 <div className="bg-white rounded-xl shadow-md p-6">
-                  <h2 className="text-xl font-bold mb-4 text-gray-800">
-                    Historial de Movimientos
-                  </h2>
-
+                  <h2 className="text-xl font-bold mb-4 text-gray-800">Historial de Movimientos</h2>
                   <div className="overflow-x-auto">
-
                     <table className="w-full border-collapse">
-
                       <thead>
                         <tr className="bg-gray-100">
-                          <th className="px-4 py-3 border text-left">
-                            Fecha
-                          </th>
-
-                          <th className="px-4 py-3 border text-left">
-                            Tipo
-                          </th>
-
-                          <th className="px-4 py-3 border text-right">
-                            Monto
-                          </th>
-
-                          <th className="px-4 py-3 border text-left">
-                            Sucursal
-                          </th>
-
-                          <th className="px-4 py-3 border text-right">
-                            Saldo
-                          </th>
+                          <th className="px-4 py-3 border text-left">Fecha</th>
+                          <th className="px-4 py-3 border text-left">Tipo</th>
+                          <th className="px-4 py-3 border text-right">Monto</th>
+                          <th className="px-4 py-3 border text-left">Sucursal</th>
+                          <th className="px-4 py-3 border text-right">Saldo</th>
                         </tr>
                       </thead>
-
                       <tbody>
-
                         {datosCuenta.transacciones.map((t, i) => (
-                          <tr
-                            key={i}
-                            className="hover:bg-gray-50"
-                          >
-
-                            <td className="px-4 py-3 border">
-                              {t.fecha.split('T')[0]}
-                            </td>
-
-                            <td className="px-4 py-3 border capitalize">
-                              {t.tipo}
-                            </td>
-
-                            <td className="px-4 py-3 border text-right">
-                              ${Number(t.monto).toLocaleString()}
-                            </td>
-
-                            <td className="px-4 py-3 border">
-                              {t.sucursal || 'N/A'}
-                            </td>
-
-                            <td className="px-4 py-3 border text-right">
-                              ${Number(t.saldo).toLocaleString()}
-                            </td>
-
+                          <tr key={i} className="hover:bg-gray-50">
+                            <td className="px-4 py-3 border">{t.fecha.split('T')[0]}</td>
+                            <td className="px-4 py-3 border capitalize">{t.tipo}</td>
+                            <td className="px-4 py-3 border text-right">${Number(t.monto).toLocaleString()}</td>
+                            <td className="px-4 py-3 border">{t.sucursal || 'N/A'}</td>
+                            <td className="px-4 py-3 border text-right">${Number(t.saldo).toLocaleString()}</td>
                           </tr>
                         ))}
-
                       </tbody>
-
                     </table>
-
                   </div>
                 </div>
 
-                {/* GRÁFICA */}
                 {historial.length > 0 && (
                   <div className="bg-white rounded-xl shadow-md p-6">
-
-                    <h2 className="text-xl font-bold mb-4 text-gray-800">
-                      Evolución del Saldo
-                    </h2>
-
+                    <h2 className="text-xl font-bold mb-4 text-gray-800">Evolucion del Saldo</h2>
                     <div className="w-full h-[350px]">
-
                       <ResponsiveContainer width="100%" height="100%">
-
                         <LineChart data={historial}>
-
-                          <Line
-                            type="monotone"
-                            dataKey="saldo"
-                            stroke="#2563eb"
-                            strokeWidth={3}
-                          />
-
+                          <Line type="monotone" dataKey="saldo" stroke="#2563eb" strokeWidth={3} />
                           <CartesianGrid stroke="#d1d5db" />
-
                           <XAxis dataKey="fecha" />
-
                           <YAxis />
-
-                          <Tooltip
-                            formatter={(value) => [
-                              `$${Number(value).toLocaleString()}`,
-                              'Saldo'
-                            ]}
-                          />
-
+                          <Tooltip formatter={(value) => [`$${Number(value).toLocaleString()}`, 'Saldo']} />
                         </LineChart>
-
                       </ResponsiveContainer>
-
                     </div>
-
                   </div>
                 )}
-
               </>
             )}
-
           </div>
         </div>
       </div>
