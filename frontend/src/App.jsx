@@ -251,6 +251,46 @@ function App() {
   return (
     <div className="min-h-screen bg-gray-100 p-6">
       <div className="max-w-7xl mx-auto">
+        
+        {/* Banner de alerta para errores críticos */}
+        {error && (
+          <div className="mb-6 bg-red-600 text-white p-4 rounded-xl shadow-lg flex items-center gap-3 animate-pulse">
+            <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+            <div>
+              <h3 className="font-bold text-lg">⚠️ Error de Conexión</h3>
+              <p>{error}</p>
+            </div>
+          </div>
+        )}
+
+        {/* Banner de advertencia para latencia alta */}
+        {latencyWarning && !error && (
+          <div className="mb-6 bg-amber-500 text-white p-4 rounded-xl shadow-lg flex items-center gap-3">
+            <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <div>
+              <h3 className="font-bold text-lg">⚠️ Latencia Alta Detectada</h3>
+              <p>{latencyWarning}</p>
+            </div>
+          </div>
+        )}
+
+        {/* Banner de éxito */}
+        {mensaje && !error && !latencyWarning && (
+          <div className="mb-6 bg-green-600 text-white p-4 rounded-xl shadow-lg flex items-center gap-3">
+            <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+            </svg>
+            <div>
+              <h3 className="font-bold text-lg">✅ Operación Exitosa</h3>
+              <p>{mensaje}</p>
+            </div>
+          </div>
+        )}
+
         <nav className="bg-black shadow-lg mb-8 rounded-xl">
           <div className="max-w-7xl mx-auto px-6 py-4">
             <h1 className="text-3xl text-center font-bold text-white">Banco Nexus - Sistema Bancario</h1>
@@ -301,9 +341,7 @@ function App() {
               )}
             </div>
 
-            {latencyWarning && <div className="mt-4 bg-amber-100 border border-amber-300 text-amber-800 px-4 py-3 rounded-lg">{latencyWarning}</div>}
-            {error && <div className="mt-4 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg">{error}</div>}
-            {mensaje && <div className="mt-4 bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded-lg">{mensaje}</div>}
+
           </div>
 
           <div className="lg:col-span-3 flex flex-col gap-6">
