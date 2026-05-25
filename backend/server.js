@@ -5,8 +5,17 @@ const cors = require('cors');
 const app = express();
 const PORT = 3001;
 
-const uri = 'mongodb://localhost:27017';
-const client = new MongoClient(uri);
+const uri = 'mongodb://mongo1:27017,mongo2:27018,mongo3:27019/banco_nexus?replicaSet=rsBanco';
+const client = new MongoClient(uri, {
+  serverSelectionTimeoutMS: 5000,
+  connectTimeoutMS: 5000,
+  socketTimeoutMS: 30000,
+  maxPoolSize: 10,
+  minPoolSize: 2,
+  heartbeatFrequencyMS: 2000,
+  retryWrites: true,
+  retryReads: true
+});
 
 let db;
 
@@ -14,23 +23,26 @@ app.use(cors());
 app.use(express.json());
 
 async function connectDB() {
-
   try {
-
     await client.connect();
-
     db = client.db('banco_nexus');
-
     console.log('Conectado a MongoDB');
 
+    client.on('serverDescriptionChanged', (event) => {
+      console.log('🔄 Cambio en el servidor:', event.newDescription.address, '-', event.newDescription.type);
+    });
+
+    client.on('topologyDescriptionChanged', (event) => {
+      console.log('🔄 Cambio en la topología');
+      event.newDescription.servers.forEach((server) => {
+        console.log('  -', server.address, ':', server.type);
+      });
+    });
+
   } catch (err) {
-
     console.error('Error al conectar a MongoDB:', err);
-
-    process.exit(1);
-
+    setTimeout(connectDB, 5000);
   }
-
 }
 
 app.get('/api/cuenta/:cuenta', async (req, res) => {

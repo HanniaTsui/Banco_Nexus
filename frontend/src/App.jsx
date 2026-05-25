@@ -282,7 +282,7 @@ function App() {
               <button onClick={limpiar} className="w-full py-3 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors font-semibold">Limpiar</button>
             </div>
 
-            <div className="mt-6 p-4 bg-slate-50 rounded-xl border border-slate-200">
+            <div className="mt-6 p-4 bg-slate-50 rounded-xl border border-slate-200" style={{ display: 'none' }}>
               <h3 className="text-lg font-semibold text-slate-800 mb-3">Pruebas de persistencia y replica</h3>
               <p className="text-sm text-slate-600 mb-4">Guarda el estado antes del reinicio y verifica que los datos se mantengan. Usa la prueba de replica para ejecutar una operacion de escritura y confirmar el comportamiento.</p>
               <button onClick={guardarPersistencia} className="w-full py-2 mb-2 bg-sky-600 text-white rounded-lg hover:bg-sky-700 transition-colors font-semibold">Guardar prueba de persistencia</button>
